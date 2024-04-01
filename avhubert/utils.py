@@ -9,6 +9,9 @@ import torch
 import random
 import numpy as np
 from typing import Dict, List, Optional, Tuple
+from scipy.io import wavfile
+from python_speech_features import logfbank
+import torch.nn.functional as F
 
 def load_video(path):
     for i in range(3):
@@ -28,6 +31,66 @@ def load_video(path):
             print(f"failed loading {path} ({i} / 3)")
             if i == 2:
                 raise ValueError(f"Unable to load {path}")
+
+def load_image(path,task_cfg):
+    """Load image from path and converted into grayscale in np array format
+
+    Args:
+        path (str): image file path
+
+    Returns:
+        np.ndarray: shape (1,h,w,1)
+    """
+    image = cv2.imread(path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY ) 
+
+    target_size = (task_cfg.image_crop_size, task_cfg.image_crop_size)
+    image = cv2.resize(image,target_size,cv2.INTER_LINEAR)
+    # create single temporal dimension
+    image = np.array([image])
+
+    transform = Compose([
+                Normalize( 0.0,255.0 ),
+                CenterCrop((task_cfg.image_crop_size, task_cfg.image_crop_size)),
+                Normalize(task_cfg.image_mean, task_cfg.image_std) ])
+
+    image = transform(image)
+    image = np.expand_dims(image, axis=-1)
+    image = torch.from_numpy(image.astype(np.float32))
+
+    return image
+
+def load_audio(path,task_cfg):
+    def stacker(feats, stack_order):
+        """
+        Concatenating consecutive audio frames
+        Args:
+        feats - numpy.ndarray of shape [T, F]
+        stack_order - int (number of neighboring frames to concatenate
+        Returns:
+        feats - numpy.ndarray of shape [T', F']
+        """
+        feat_dim = feats.shape[1]
+        if len(feats) % stack_order != 0:
+            res = stack_order - len(feats) % stack_order
+            res = np.zeros([res, feat_dim]).astype(feats.dtype)
+            feats = np.concatenate([feats, res], axis=0)
+        feats = feats.reshape((-1, stack_order, feat_dim)).reshape(-1, stack_order*feat_dim)
+        return feats
+    
+    sample_rate, wav_data = wavfile.read(path)
+    # print("sample_rate",sample_rate)
+    # print("wav_data.shape",wav_data.shape)
+    assert sample_rate == 16_000 and len(wav_data.shape) == 1
+    audio_feats = logfbank(wav_data, samplerate=sample_rate).astype(np.float32) # [T, F]
+    audio_feats = stacker(audio_feats, task_cfg.stack_order_audio) # [T/stack_order_audio, F*stack_order_audio]
+    audio_feats = torch.from_numpy(audio_feats.astype(np.float32))
+    # print(audio_feats.shape)
+    # exit(0)
+    if task_cfg.normalize:
+        with torch.no_grad():
+            audio_feats = F.layer_norm(audio_feats, audio_feats.shape[1:])
+    return audio_feats
 
 
 class Compose(object):
