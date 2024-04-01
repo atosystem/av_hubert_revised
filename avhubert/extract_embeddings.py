@@ -113,17 +113,18 @@ def main(args):
     os.makedirs( os.path.join(args["output_emb_dir"],"image"),exist_ok=True)
     os.makedirs( os.path.join(args["output_emb_dir"],"audio"),exist_ok=True)
 
-    # for image_fp in tqdm.tqdm(all_images,"Processing images"):
-    #     output_fp = os.path.join(args["output_emb_dir"],"image",os.path.basename(image_fp))
-    #     proc_one_image(
-    #         image_fp=image_fp,
-    #         out_fp=output_fp
-    #     )
-    #     # print(image_fp,output_fp)
-    #     # exit(0)
+    for image_fp in tqdm.tqdm(all_images,"Processing images"):
+        output_fp = os.path.join(args["output_emb_dir"],"image",os.path.basename(image_fp).replace(".jpg",".pt"))
+        proc_one_image(
+            image_fp=image_fp,
+            out_fp=output_fp
+            out_fp=output_fp
+        )
+        # print(image_fp,output_fp)
+        # exit(0)
     
     for audio_fp in tqdm.tqdm(all_wavs,"Processing audio"):
-        output_fp = os.path.join(args["output_emb_dir"],"audio",os.path.basename(audio_fp))
+        output_fp = os.path.join(args["output_emb_dir"],"audio",os.path.basename(audio_fp).replace(".wav",".pt"))
         # print(audio_fp,output_fp)
         proc_one_audio(
             audio_fp=audio_fp,
